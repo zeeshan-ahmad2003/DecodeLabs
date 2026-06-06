@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Project 4 - Messages Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      padding: 30px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      color: #2c3e50;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #888;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    /* FORM */
+    .form-card {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      max-width: 600px;
+      margin: 0 auto 40px auto;
+    }
+
+    .form-card h2 {
+      margin-bottom: 20px;
+      color: #2c3e50;
+      font-size: 18px;
+    }
+
+    .form-card input,
+    .form-card textarea {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    .form-card input:focus,
+    .form-card textarea:focus {
+      border-color: #3498db;
+    }
+
+    .form-card textarea {
+      height: 100px;
+      resize: vertical;
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 12px;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-submit:hover { background: #2980b9; }
+    .btn-submit:disabled { background: #aaa; cursor: not-allowed; }
+
+    /* STATUS MESSAGES */
+    #formStatus {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+
+    #formStatus.success { background: #d4edda; color: #155724; display: block; }
+    #formStatus.error   { background: #f8d7da; color: #721c24; display: block; }
+
+    /* MESSAGES LIST */
+    .messages-section {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .messages-section h2 {
+      margin-bottom: 15px;
+      color: #2c3e50;
+      font-size: 18px;
+    }
+
+    #loading {
+      text-align: center;
+      color: #888;
+      padding: 20px;
+      display: none;
+    }
+
+    #errorMsg {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      display: none;
+    }
+
+    .message-card {
+      background: white;
+      padding: 18px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      margin-bottom: 15px;
+      position: relative;
+    }
+
+    .message-card .msg-name  { font-weight: bold; color: #2c3e50; }
+    .message-card .msg-email { font-size: 13px; color: #888; margin-bottom: 8px; }
+    .message-card .msg-text  { font-size: 14px; line-height: 1.5; }
+    .message-card .msg-date  { font-size: 12px; color: #bbb; margin-top: 8px; }
+
+    .btn-delete {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+
+    .btn-delete:hover { background: #c0392b; }
+
+    #noMessages {
+      text-align: center;
+      color: #aaa;
+      padding: 30px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📬 Messages Dashboard</h1>
+  <p class="subtitle">Project 4 — Frontend & Backend Integration | DecodeLabs Batch 2026</p>
+
+  <!-- FORM SECTION -->
+  <div class="form-card">
+    <h2>✉️ Send a Message</h2>
+
+    <input type="text"  id="name"    placeholder="Your Name" />
+    <input type="email" id="email"   placeholder="Your Email" />
+    <textarea           id="message" placeholder="Your message (min 10 characters)"></textarea>
+
+    <button class="btn-submit" id="submitBtn" onclick="submitMessage()">Send Message</button>
+    <div id="formStatus"></div>
+  </div>
+
+  <!-- MESSAGES LIST SECTION -->
+  <div class="messages-section">
+    <h2>📋 All Messages</h2>
+
+    <div id="loading">⏳ Loading messages...</div>
+    <div id="errorMsg"></div>
+    <div id="noMessages">No messages yet. Be the first to send one!</div>
+    <div id="messagesList"></div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:3000'
+
+    // =============================================
+    // LOAD ALL MESSAGES when page opens
+    // =============================================
+    async function loadMessages() {
+      const loading     = document.getElementById('loading')
+      const errorMsg    = document.getElementById('errorMsg')
+      const noMessages  = document.getElementById('noMessages')
+      const messagesList = document.getElementById('messagesList')
+
+      // Show loading spinner
+      loading.style.display = 'block'
+      errorMsg.style.display = 'none'
+      noMessages.style.display = 'none'
+      messagesList.innerHTML = ''
+
+      try {
+        const response = await fetch(`${API}/api/messages`)
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`)
+        }
+
+        const result = await response.json()
+
+        if (result.data.length === 0) {
+          noMessages.style.display = 'block'
+        } else {
+          result.data.forEach(msg => {
+            messagesList.appendChild(createMessageCard(msg))
+          })
+        }
+
+      } catch (error) {
+        errorMsg.textContent = '❌ Could not load messages. Is the server running?'
+        errorMsg.style.display = 'block'
+      } finally {
+        // Always hide loading spinner whether success or error
+        loading.style.display = 'none'
+      }
+    }
+
+    // =============================================
+    // CREATE a message card element
+    // =============================================
+    function createMessageCard(msg) {
+      const card = document.createElement('div')
+      card.className = 'message-card'
+      card.id = `msg-${msg.id}`
+
+      const name = document.createElement('div')
+      name.className = 'msg-name'
+      name.textContent = msg.name
+
+      const email = document.createElement('div')
+      email.className = 'msg-email'
+      email.textContent = msg.email
+
+      const text = document.createElement('div')
+      text.className = 'msg-text'
+      text.textContent = msg.message
+
+      const date = document.createElement('div')
+      date.className = 'msg-date'
+      date.textContent = new Date(msg.createdAt).toLocaleString()
+
+      const deleteBtn = document.createElement('button')
+      deleteBtn.className = 'btn-delete'
+      deleteBtn.textContent = 'Delete'
+      deleteBtn.onclick = () => deleteMessage(msg.id)
+
+      card.appendChild(name)
+      card.appendChild(email)
+      card.appendChild(text)
+      card.appendChild(date)
+      card.appendChild(deleteBtn)
+
+      return card
+    }
+
+    // =============================================
+    // SUBMIT new message
+    // =============================================
+    async function submitMessage() {
+      const name       = document.getElementById('name').value.trim()
+      const email      = document.getElementById('email').value.trim()
+      const message    = document.getElementById('message').value.trim()
+      const submitBtn  = document.getElementById('submitBtn')
+      const formStatus = document.getElementById('formStatus')
+
+      // Reset status
+      formStatus.className = ''
+      formStatus.style.display = 'none'
+
+      // Basic frontend validation
+      if (!name || !email || !message) {
+        formStatus.textContent = '⚠️ Please fill in all fields.'
+        formStatus.className = 'error'
+        return
+      }
+
+      // Disable button while sending
+      submitBtn.disabled = true
+      submitBtn.textContent = 'Sending...'
+
+      try {
+        const response = await fetch(`${API}/api/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, message })
+        })
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Something went wrong')
+        }
+
+        // Success — show message, clear form, reload list
+        formStatus.textContent = '✅ Message sent successfully!'
+        formStatus.className = 'success'
+
+        document.getElementById('name').value    = ''
+        document.getElementById('email').value   = ''
+        document.getElementById('message').value = ''
+
+        loadMessages()
+
+      } catch (error) {
+        formStatus.textContent = `❌ ${error.message}`
+        formStatus.className = 'error'
+      } finally {
+        submitBtn.disabled = false
+        submitBtn.textContent = 'Send Message'
+      }
+    }
+
+    // =============================================
+    // DELETE a message
+    // =============================================
+    async function deleteMessage(id) {
+      if (!confirm('Are you sure you want to delete this message?')) return
+
+      try {
+        const response = await fetch(`${API}/api/messages/${id}`, {
+          method: 'DELETE'
+        })
+
+        if (!response.ok) {
+          throw new Error('Could not delete message')
+        }
+
+        // Remove card from DOM without reloading
+        const card = document.getElementById(`msg-${id}`)
+        if (card) card.remove()
+
+        // Show "no messages" if list is now empty
+        const messagesList = document.getElementById('messagesList')
+        if (messagesList.children.length === 0) {
+          document.getElementById('noMessages').style.display = 'block'
+        }
+
+      } catch (error) {
+        alert(`❌ ${error.message}`)
+      }
+    }
+
+    // Load messages as soon as page opens
+    loadMessages()
+  </script>
+
+</body>
+</html>
